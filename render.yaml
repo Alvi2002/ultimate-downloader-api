@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: ultimate-downloader-api
+    runtime: node
+    buildCommand: |
+      npm install
+      pip install yt-dlp
+    startCommand: npm start
