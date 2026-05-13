@@ -1,6 +1,5 @@
 // ======================================================
-// ULTIMATE MULTI PLATFORM DOWNLOADER API
-// RENDER + EXPRESS + YT-DLP READY
+// ULTIMATE JSON MULTI PLATFORM DOWNLOADER API
 // ======================================================
 
 import express from "express";
@@ -23,7 +22,7 @@ app.get("/", (req, res) => {
     res.json({
         status: true,
         developer: "Alvi Ahmed",
-        message: "Ultimate Downloader API Running"
+        message: "Ultimate JSON Downloader API Running"
     });
 
 });
@@ -81,48 +80,97 @@ app.get("/down", async (req, res) => {
         }
 
         // ==================================================
-        // YOUTUBE / INSTAGRAM / FACEBOOK
+        // YOUTUBE
+        // ==================================================
+
+        if (
+            url.includes("youtube.com") ||
+            url.includes("youtu.be")
+        ) {
+
+            try {
+
+                const response = await fetch(
+                    `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(url)}`
+                );
+
+                const json = await response.json();
+
+                return res.json({
+                    status: true,
+                    platform: "YouTube",
+                    data: {
+                        title: json.data.title,
+                        video: json.data.downloadUrl,
+                        thumbnail: json.data.thumbnail
+                    }
+                });
+
+            } catch {
+
+                return res.json({
+                    status: false,
+                    platform: "YouTube",
+                    message: "YouTube downloader failed"
+                });
+
+            }
+
+        }
+
+        // ==================================================
+        // INSTAGRAM / FACEBOOK
         // USING YT-DLP
         // ==================================================
 
         const fileName = `video_${Date.now()}.mp4`;
 
-        const command = `yt-dlp -f mp4 -o "${fileName}" "${url}"`;
+        const command =
+            `yt-dlp -f "best[ext=mp4]" --get-url "${url}"`;
 
-        exec(command, async (error) => {
+        exec(command, async (error, stdout) => {
 
             if (error) {
 
                 return res.status(500).json({
                     status: false,
-                    message: "yt-dlp download failed",
+                    message: "yt-dlp failed",
                     error: error.toString()
                 });
 
             }
 
-            // ==============================================
-            // FILE CHECK
-            // ==============================================
+            const videoUrl = stdout.trim();
 
-            if (!fs.existsSync(fileName)) {
+            if (!videoUrl) {
 
                 return res.status(500).json({
                     status: false,
-                    message: "Downloaded file missing"
+                    message: "No direct video URL found"
                 });
 
             }
 
-            // ==============================================
-            // SEND FILE
-            // ==============================================
+            let platform = "Unknown";
 
-            res.download(fileName, () => {
+            if (url.includes("instagram.com")) {
+                platform = "Instagram";
+            }
 
-                // DELETE FILE AFTER DOWNLOAD
-                fs.unlinkSync(fileName);
+            if (
+                url.includes("facebook.com") ||
+                url.includes("fb.watch")
+            ) {
+                platform = "Facebook";
+            }
 
+            return res.json({
+                status: true,
+                platform: platform,
+                data: {
+                    title: `${platform} Video`,
+                    video: videoUrl
+                }
             });
 
         });
