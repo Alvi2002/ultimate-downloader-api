@@ -1,7 +1,3 @@
-// ======================================================
-// ULTIMATE JSON MULTI PLATFORM DOWNLOADER API (FIXED)
-// ======================================================
-
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
@@ -19,15 +15,31 @@ app.use(express.json());
 app.get("/", (req, res) => {
 
     res.json({
-        status: true,
-        developer: "Alvi Ahmed",
-        message: "🥏 Ultimate Downloader API"
+        Status: true,
+        Developer: "Alvi Ahmed",
+        Message: "🥏 Ultimate Downloader"
     });
-
 });
 
 // ======================================================
-// MAIN DOWNLOADER
+// SAFE EXEC WRAPPER
+// ======================================================
+
+function run(cmd) {
+
+    return new Promise((resolve) => {
+
+        exec(cmd, { timeout: 20000 }, (err, stdout) => {
+
+            if (err) return resolve(null);
+
+            resolve(stdout?.trim());
+        });
+    });
+}
+
+// ======================================================
+// MAIN API
 // ======================================================
 
 app.get("/down", async (req, res) => {
@@ -36,16 +48,16 @@ app.get("/down", async (req, res) => {
 
     if (!url) {
 
-        return res.status(400).json({
+        return res.json({
             status: false,
-            message: "No URL Provided"
+            message: "No URL provided"
         });
     }
 
     try {
 
         // ==================================================
-        // TIKTOK (UNCHANGED - 100% WORKING)
+        // TIKTOK (UNCHANGED - 100%)
         // ==================================================
 
         if (
@@ -53,11 +65,11 @@ app.get("/down", async (req, res) => {
             url.includes("vt.tiktok.com")
         ) {
 
-            const response = await fetch(
+            const api = await fetch(
                 `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`
             );
 
-            const json = await response.json();
+            const json = await api.json();
 
             if (json.data) {
 
@@ -68,15 +80,129 @@ app.get("/down", async (req, res) => {
                         title: json.data.title,
                         video: json.data.play,
                         music: json.data.music,
-                        thumbnail: json.data.cover,
-                        author: json.data.author?.nickname
+                        thumbnail: json.data.cover
                     }
                 });
             }
         }
 
         // ==================================================
-        // YOUTUBE (FIXED + MULTI FALLBACK)
+        // FACEBOOK (UNCHANGED)
+        // ==================================================
+
+        if (
+            url.includes("facebook.com") ||
+            url.includes("fb.watch")
+        ) {
+
+            const video = await run(
+                `yt-dlp -f "best[ext=mp4]" --get-url "${url}"`
+            );
+
+            if (!video) {
+
+                return res.json({
+                    status: false,
+                    platform: "Facebook",
+                    message: "Facebook download failed"
+                });
+            }
+
+            return res.json({
+                status: true,
+                platform: "Facebook",
+                data: {
+                    title: "Facebook Video",
+                    video
+                }
+            });
+        }
+
+        // ==================================================
+        // INSTAGRAM (HYBRID API + FALLBACK)
+        // ==================================================
+
+        if (url.includes("instagram.com")) {
+
+            // -------------------------
+            // API 1
+            // -------------------------
+            try {
+
+                const api = await fetch(
+                    `https://api.savetube.me/api/instagram?url=${encodeURIComponent(url)}`
+                );
+
+                const json = await api.json();
+
+                if (json?.data?.url) {
+
+                    return res.json({
+                        status: true,
+                        platform: "Instagram",
+                        data: {
+                            title: "Instagram Video",
+                            video: json.data.url
+                        }
+                    });
+                }
+
+            } catch (e) {}
+
+            // -------------------------
+            // API 2 fallback
+            // -------------------------
+            try {
+
+                const api2 = await fetch(
+                    `https://api.sssinstagram.com/api/convert?url=${encodeURIComponent(url)}`
+                );
+
+                const json2 = await api2.json();
+
+                if (json2?.url) {
+
+                    return res.json({
+                        status: true,
+                        platform: "Instagram",
+                        data: {
+                            title: "Instagram Video",
+                            video: json2.url
+                        }
+                    });
+                }
+
+            } catch (e) {}
+
+            // -------------------------
+            // YT-DLP fallback (NO COOKIES)
+            // -------------------------
+
+            const video = await run(
+                `yt-dlp -f "bv*+ba/best" --no-check-certificate --get-url "${url}"`
+            );
+
+            if (!video) {
+
+                return res.json({
+                    status: false,
+                    platform: "Instagram",
+                    message: "Instagram video not available"
+                });
+            }
+
+            return res.json({
+                status: true,
+                platform: "Instagram",
+                data: {
+                    title: "Instagram Video",
+                    video
+                }
+            });
+        }
+
+        // ==================================================
+        // YOUTUBE (HYBRID SYSTEM)
         // ==================================================
 
         if (
@@ -84,16 +210,16 @@ app.get("/down", async (req, res) => {
             url.includes("youtu.be")
         ) {
 
+            // -------------------------
+            // API 1
+            // -------------------------
             try {
 
-                // -------------------------
-                // API FALLBACK
-                // -------------------------
-                const response = await fetch(
+                const api = await fetch(
                     `https://api.vevioz.com/api/button/mp4?url=${encodeURIComponent(url)}`
                 );
 
-                const text = await response.text();
+                const text = await api.text();
 
                 if (!text.startsWith("<!DOCTYPE")) {
 
@@ -112,64 +238,24 @@ app.get("/down", async (req, res) => {
             } catch (e) {}
 
             // -------------------------
-            // YT-DLP FALLBACK
+            // API 2 fallback
             // -------------------------
-
-            const command =
-                `yt-dlp --no-warnings --no-check-certificate -f "bv*+ba/best" --get-url "${url}"`;
-
-            exec(command, (error, stdout) => {
-
-                if (error || !stdout) {
-
-                    return res.json({
-                        status: false,
-                        platform: "YouTube",
-                        message: "YouTube download failed (blocked by platform)"
-                    });
-                }
-
-                return res.json({
-                    status: true,
-                    platform: "YouTube",
-                    data: {
-                        title: "YouTube Video",
-                        video: stdout.trim()
-                    }
-                });
-            });
-
-            return;
-        }
-
-        // ==================================================
-        // INSTAGRAM (FIXED + MULTI FALLBACK)
-        // ==================================================
-
-        if (url.includes("instagram.com")) {
-
-            let platform = "Instagram";
-
             try {
 
-                // -------------------------
-                // API FALLBACK (SAVETUBE)
-                // -------------------------
-                const api = await fetch(
-                    `https://api.savetube.me/api/instagram?url=${encodeURIComponent(url)}`
+                const api2 = await fetch(
+                    `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(url)}`
                 );
 
-                const json = await api.json();
+                const json2 = await api2.json();
 
-                if (json?.data?.url) {
+                if (json2?.data?.downloadUrl) {
 
                     return res.json({
                         status: true,
-                        platform: platform,
+                        platform: "YouTube",
                         data: {
-                            title: "Instagram Video",
-                            video: json.data.url,
-                            thumbnail: json.data.thumbnail || null
+                            title: json2.data.title || "YouTube Video",
+                            video: json2.data.downloadUrl
                         }
                     });
                 }
@@ -177,64 +263,39 @@ app.get("/down", async (req, res) => {
             } catch (e) {}
 
             // -------------------------
-            // YT-DLP FALLBACK
+            // YT-DLP fallback (SAFE)
             // -------------------------
 
-            const command =
-                `yt-dlp --no-warnings --no-check-certificate -f "bv*+ba/best" --get-url "${url}"`;
+            const video = await run(
+                `yt-dlp -f "bv*+ba/best" --no-check-certificate --get-url "${url}"`
+            );
 
-            exec(command, (error, stdout) => {
-
-                if (error || !stdout) {
-
-                    return res.json({
-                        status: false,
-                        platform: platform,
-                        message: "Instagram video blocked or private"
-                    });
-                }
-
-                return res.json({
-                    status: true,
-                    platform: platform,
-                    data: {
-                        title: "Instagram Reel",
-                        video: stdout.trim()
-                    }
-                });
-            });
-
-            return;
-        }
-
-        // ==================================================
-        // FACEBOOK (UNCHANGED - WORKING)
-        // ==================================================
-
-        let platform = "Facebook";
-
-        const command =
-            `yt-dlp --no-warnings --no-check-certificate -f "best[ext=mp4]" --get-url "${url}"`;
-
-        exec(command, (error, stdout) => {
-
-            if (error || !stdout) {
+            if (!video) {
 
                 return res.json({
                     status: false,
-                    platform: platform,
-                    message: "Facebook download failed"
+                    platform: "YouTube",
+                    message: "YouTube blocked or unavailable"
                 });
             }
 
             return res.json({
                 status: true,
-                platform: platform,
+                platform: "YouTube",
                 data: {
-                    title: "Facebook Video",
-                    video: stdout.trim()
+                    title: "YouTube Video",
+                    video
                 }
             });
+        }
+
+        // ==================================================
+        // UNSUPPORTED
+        // ==================================================
+
+        return res.json({
+            status: false,
+            message: "Unsupported platform"
         });
 
     } catch (e) {
@@ -255,5 +316,5 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
 
-    console.log(`Server Running On Port ${PORT}`);
+    console.log(`Hybrid API Running on ${PORT}`);
 });
