@@ -49,7 +49,7 @@ app.get("/down", async (req, res) => {
 
     try {
         // ==================================================
-        // TIKTOK
+        // TIKTOK (UNCHANGED - 100%)
         // ==================================================
 
         if (url.includes("tiktok.com") || url.includes("vt.tiktok.com")) {
@@ -73,7 +73,7 @@ app.get("/down", async (req, res) => {
         }
 
         // ==================================================
-        // FACEBOOK
+        // FACEBOOK (UNCHANGED)
         // ==================================================
 
         if (url.includes("facebook.com") || url.includes("fb.watch")) {
@@ -100,48 +100,45 @@ app.get("/down", async (req, res) => {
         }
 
         // ==================================================
-        // INSTAGRAM (GRABGRAM API STYLE)
+        // INSTAGRAM (API SCRAPER METHOD)
         // ==================================================
 
         if (url.includes("instagram.com")) {
             try {
-                // SEND REQUEST TO GRABGRAM
-                const response = await fetch("https://grabgram.io/reels-download", {
+                // এপিআই মেথড ব্যবহার করে ভিডিও লিঙ্ক খোঁজা
+                const response = await fetch("https://snapinsta.app/action/api/get-media", {
                     method: "POST",
                     headers: {
                         "content-type": "application/x-www-form-urlencoded",
-                        "user-agent": "Mozilla/5.0"
+                        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                     },
                     body: `url=${encodeURIComponent(url)}`
                 });
 
-                const html = await response.text();
+                const data = await response.json();
 
-                // FIND MP4 LINK
-                const match = html.match(/(https?:\/\/[^"' ]+\.mp4[^"' ]*)/i);
-
-                if (match && match[1]) {
+                if (data && data.url) {
                     return res.json({
                         status: true,
                         platform: "Instagram",
                         data: {
-                            title: "Instagram Reel",
-                            video: match[1]
+                            title: "Instagram Video",
+                            video: data.url
                         }
                     });
                 }
             } catch (e) {}
 
-            // FALLBACK yt-dlp
+            // FALLBACK yt-dlp (কুকি ছাড়া)
             const video = await run(
-                `yt-dlp -f "bv*+ba/best" --no-check-certificate --get-url "${url}"`
+                `yt-dlp --user-agent "Mozilla/5.0" --no-check-certificate --get-url "${url}"`
             );
 
             if (!video) {
                 return res.json({
                     status: false,
                     platform: "Instagram",
-                    message: "Instagram download failed"
+                    message: "Instagram video not available"
                 });
             }
 
@@ -173,12 +170,12 @@ app.get("/down", async (req, res) => {
     }
 });
 
-// ======================================================
+// ==================================================
 // PORT
-// ======================================================
+// ==================================================
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`Hybrid API Running on ${PORT}`);
+    console.log(`🥏 Ultimate Downloader API Running on ${PORT}`);
 });
