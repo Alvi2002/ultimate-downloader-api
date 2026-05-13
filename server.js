@@ -180,5 +180,5 @@ app.get("/down", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`🥏 Ultimate Downloader API Running on ${PORT}`);
+    console.log(`Hybrid API Running on ${PORT}`);
 });
