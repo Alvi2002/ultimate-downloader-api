@@ -1,7 +1,7 @@
 {
   "name": "ultimate-downloader-api",
   "version": "1.0.0",
-  "description": "Social Media Downloader API",
+  "description": "Fast Social Media Downloader API",
   "main": "server.js",
   "type": "module",
   "scripts": {
