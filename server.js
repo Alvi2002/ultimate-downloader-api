@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
-import { exec } from "child_process";
 
 const app = express();
 
@@ -9,38 +8,38 @@ app.use(cors());
 app.use(express.json());
 
 // ======================================================
-// HOME
+// HOME ROUTE
 // ======================================================
-
 app.get("/", (req, res) => {
     res.json({
         Status: true,
         Developer: "Alvi Ahmed",
-        Message: "🥏 Ultimate Downloader"
+        Message: "🥏 Ultimate Downloader API is Running"
     });
 });
 
-// ======================================================
-// SAFE EXEC WRAPPER
-// ======================================================
-
-function run(cmd) {
-    return new Promise((resolve) => {
-        exec(cmd, { timeout: 20000 }, (err, stdout) => {
-            if (err) return resolve(null);
-            resolve(stdout?.trim());
+// Helper: ফেসবুকের শর্ট-রিডিরেক্ট লিংক আসল লিংকে কনভার্ট করার জন্য
+async function getFinalUrl(url) {
+    try {
+        const res = await fetch(url, {
+            redirect: "follow",
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
         });
-    });
+        return res.url || url;
+    } catch {
+        return url;
+    }
 }
 
 // ======================================================
-// MAIN API
+// MAIN DOWNLOAD API
 // ======================================================
-
 app.get("/down", async (req, res) => {
-    const url = req.query.url;
+    const rawUrl = req.query.url;
 
-    if (!url) {
+    if (!rawUrl) {
         return res.json({
             status: false,
             message: "No URL provided"
@@ -48,116 +47,130 @@ app.get("/down", async (req, res) => {
     }
 
     try {
-        // ==================================================
-        // TIKTOK
-        // ==================================================
-
-        if (url.includes("tiktok.com") || url.includes("vt.tiktok.com")) {
-            const api = await fetch(
-                `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`
-            );
+        // --------------------------------------------------
+        // ১. TIKTOK
+        // --------------------------------------------------
+        if (rawUrl.includes("tiktok.com")) {
+            const api = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(rawUrl)}`);
             const json = await api.json();
 
-            if (json.data) {
+            if (json?.data?.play) {
                 return res.json({
                     status: true,
                     platform: "TikTok",
                     data: {
-                        title: json.data.title,
+                        title: json.data.title || "TikTok Video",
                         video: json.data.play,
                         music: json.data.music,
                         thumbnail: json.data.cover
                     }
                 });
             }
+            return res.json({ status: false, platform: "TikTok", message: "TikTok download failed" });
         }
 
-        // ==================================================
-        // FACEBOOK
-        // ==================================================
+        // --------------------------------------------------
+        // ২. FACEBOOK
+        // --------------------------------------------------
+        if (rawUrl.includes("facebook.com") || rawUrl.includes("fb.watch")) {
+            const targetUrl = await getFinalUrl(rawUrl);
 
-        if (url.includes("facebook.com") || url.includes("fb.watch")) {
-            const video = await run(
-                `yt-dlp -f "best[ext=mp4]" --get-url "${url}"`
-            );
-
-            if (!video) {
-                return res.json({
-                    status: false,
-                    platform: "Facebook",
-                    message: "Facebook download failed"
-                });
-            }
-
-            return res.json({
-                status: true,
-                platform: "Facebook",
-                data: {
-                    title: "Facebook Video",
-                    video
-                }
-            });
-        }
-
-        // ==================================================
-        // INSTAGRAM (GRABGRAM API STYLE)
-        // ==================================================
-
-        if (url.includes("instagram.com")) {
+            // API মেথড ১: Snap Engine
             try {
-                // SEND REQUEST TO GRABGRAM
-                const response = await fetch("https://grabgram.io/reels-download", {
-                    method: "POST",
-                    headers: {
-                        "content-type": "application/x-www-form-urlencoded",
-                        "user-agent": "Mozilla/5.0"
-                    },
-                    body: `url=${encodeURIComponent(url)}`
-                });
+                const fbRes = await fetch(`https://api.vkrdownloader.xyz/server?vkr=${encodeURIComponent(targetUrl)}`);
+                const fbData = await fbRes.json();
+                const video = fbData?.data?.downloadUrl || fbData?.data?.videos?.[0]?.url;
 
-                const html = await response.text();
-
-                // FIND MP4 LINK
-                const match = html.match(/(https?:\/\/[^"' ]+\.mp4[^"' ]*)/i);
-
-                if (match && match[1]) {
+                if (video) {
                     return res.json({
                         status: true,
-                        platform: "Instagram",
+                        platform: "Facebook",
                         data: {
-                            title: "Instagram Reel",
-                            video: match[1]
+                            title: fbData.data.title || "Facebook Video",
+                            video: video
                         }
                     });
                 }
             } catch (e) {}
 
-            // FALLBACK yt-dlp
-            const video = await run(
-                `yt-dlp -f "bv*+ba/best" --no-check-certificate --get-url "${url}"`
-            );
-
-            if (!video) {
-                return res.json({
-                    status: false,
-                    platform: "Instagram",
-                    message: "Instagram download failed"
+            // API মেথড ২: Cobalt ইঞ্জিন ফলব্যাক
+            try {
+                const altRes = await fetch("https://cobalt-api.kwiatekm.tokyo/", {
+                    method: "POST",
+                    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: targetUrl })
                 });
-            }
+                const altData = await altRes.json();
+                if (altData.url) {
+                    return res.json({
+                        status: true,
+                        platform: "Facebook",
+                        data: {
+                            title: "Facebook Video",
+                            video: altData.url
+                        }
+                    });
+                }
+            } catch (e) {}
 
             return res.json({
-                status: true,
-                platform: "Instagram",
-                data: {
-                    title: "Instagram Video",
-                    video
-                }
+                status: false,
+                platform: "Facebook",
+                message: "Facebook download failed"
             });
         }
 
-        // ==================================================
-        // UNSUPPORTED
-        // ==================================================
+        // --------------------------------------------------
+        // ৩. INSTAGRAM
+        // --------------------------------------------------
+        if (rawUrl.includes("instagram.com")) {
+            // ট্র্যাকিং কোড বাদ দিয়ে ফ্রেশ লিঙ্ক নেওয়া
+            const cleanUrl = rawUrl.split("?")[0];
+
+            // API মেথড ১: VKR ডিরেক্ট
+            try {
+                const igRes = await fetch(`https://api.vkrdownloader.xyz/server?vkr=${encodeURIComponent(cleanUrl)}`);
+                const igData = await igRes.json();
+                const video = igData?.data?.downloadUrl || igData?.data?.videos?.[0]?.url;
+
+                if (video) {
+                    return res.json({
+                        status: true,
+                        platform: "Instagram",
+                        data: {
+                            title: igData.data.title || "Instagram Reel",
+                            video: video
+                        }
+                    });
+                }
+            } catch (e) {}
+
+            // API মেথড ২: Cobalt ইঞ্জিন ফলব্যাক
+            try {
+                const cobaltRes = await fetch("https://cobalt-api.kwiatekm.tokyo/", {
+                    method: "POST",
+                    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: cleanUrl })
+                });
+                const cobaltData = await cobaltRes.json();
+                if (cobaltData.url) {
+                    return res.json({
+                        status: true,
+                        platform: "Instagram",
+                        data: {
+                            title: "Instagram Reel",
+                            video: cobaltData.url
+                        }
+                    });
+                }
+            } catch (e) {}
+
+            return res.json({
+                status: false,
+                platform: "Instagram",
+                message: "Instagram download failed"
+            });
+        }
 
         return res.json({
             status: false,
@@ -174,11 +187,9 @@ app.get("/down", async (req, res) => {
 });
 
 // ======================================================
-// PORT
+// LISTEN
 // ======================================================
-
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-    console.log(`Hybrid API Running on ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
